@@ -33,7 +33,7 @@ HOME_HTML = r"""
     padding:18px;
   }
   .box {
-    width:min(560px, 94vw);
+    width:min(860px, 96vw);
     background:linear-gradient(180deg, rgba(16,26,51,.96), rgba(12,22,43,.96));
     border:1px solid rgba(129,161,213,.22);
     border-radius:18px;
@@ -41,6 +41,7 @@ HOME_HTML = r"""
     box-shadow:0 18px 40px rgba(0,0,0,.28);
   }
   h1 { margin:0 0 8px; font-size:24px; }
+  h2 { margin:18px 0 8px; font-size:16px; color:#dbeafe; }
   p { margin:8px 0; color:#c9d7ee; line-height:1.35; }
   .code {
     display:inline-block;
@@ -53,7 +54,7 @@ HOME_HTML = r"""
     font-weight:800;
   }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:16px 0 10px; }
-  a.btn {
+  a.btn, button.btn {
     display:block;
     text-align:center;
     padding:14px 12px;
@@ -63,6 +64,10 @@ HOME_HTML = r"""
     font-weight:800;
     background:linear-gradient(180deg, #2f81f7, #1f6feb);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 8px 18px rgba(0,0,0,.18);
+    border:0;
+    cursor:pointer;
+    width:100%;
+    font:inherit;
   }
   a.secondary { background:linear-gradient(180deg, #2ea043, #238636); }
   .small { font-size:13px; opacity:.82; }
@@ -76,7 +81,67 @@ HOME_HTML = r"""
     font-size:13px;
     color:#c9d7ee;
   }
-  @media (max-width: 640px) { .grid { grid-template-columns:1fr; } }
+  .qrGrid {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin-top:12px;
+  }
+  .qrCard {
+    background:rgba(8,16,31,.38);
+    border:1px solid rgba(129,161,213,.15);
+    border-radius:14px;
+    padding:12px;
+    text-align:center;
+  }
+  .qrCard h3 {
+    margin:0 0 8px;
+    font-size:15px;
+    color:#e6edf3;
+  }
+  .qrBox {
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    min-height:190px;
+    padding:10px;
+    background:#fff;
+    border-radius:12px;
+    width:max-content;
+    max-width:100%;
+    margin:0 auto 10px;
+  }
+  .qrBox canvas,
+  .qrBox img {
+    display:block;
+    width:180px !important;
+    height:180px !important;
+  }
+  .copyBtn {
+    margin-top:8px;
+    padding:9px 10px;
+    border-radius:10px;
+    border:1px solid rgba(129,161,213,.25);
+    color:#dbeafe;
+    background:#122042;
+    cursor:pointer;
+    font-weight:700;
+    width:100%;
+  }
+  .hint {
+    margin-top:10px;
+    padding:10px;
+    border-radius:12px;
+    background:rgba(31,111,235,.12);
+    border:1px solid rgba(88,166,255,.20);
+    color:#dbeafe;
+    font-size:13px;
+    line-height:1.35;
+  }
+  @media (max-width: 720px) {
+    .grid, .qrGrid { grid-template-columns:1fr; }
+    .box { padding:18px; }
+  }
 </style>
 </head>
 <body>
@@ -86,16 +151,87 @@ HOME_HTML = r"""
     <p>Código da sessão: <span class="code">{{ room_id }}</span></p>
 
     <div class="grid">
-      <a class="btn" href="{{ url_for('control_room', room_id=room_id) }}">Abrir controle</a>
-      <a class="btn secondary" href="{{ url_for('monitor_room', room_id=room_id) }}">Abrir monitor</a>
+      <a class="btn" href="{{ control_url }}" target="_blank" rel="noopener noreferrer">Abrir controle em nova aba</a>
+      <a class="btn secondary" href="{{ monitor_url }}" target="_blank" rel="noopener noreferrer">Abrir monitor em nova aba</a>
+    </div>
+
+    <div class="hint">
+      A página inicial fica aberta. Para usar com celular: abra o monitor no PC em nova aba e escaneie o QR Code do controle com o celular.
+    </div>
+
+    <h2>QR Codes da sessão</h2>
+    <div class="qrGrid">
+      <section class="qrCard">
+        <h3>Controle no celular</h3>
+        <div id="qrControl" class="qrBox"></div>
+        <p class="small">Escaneie este QR Code no celular para controlar esta sessão.</p>
+        <button class="copyBtn" type="button" onclick="copyLink(CONTROL_URL, 'Controle')">Copiar link do controle</button>
+      </section>
+
+      <section class="qrCard">
+        <h3>Monitor</h3>
+        <div id="qrMonitor" class="qrBox"></div>
+        <p class="small">Use este QR Code se quiser abrir o monitor em outro aparelho.</p>
+        <button class="copyBtn" type="button" onclick="copyLink(MONITOR_URL, 'Monitor')">Copiar link do monitor</button>
+      </section>
     </div>
 
     <p class="small">Exemplo: deixe o monitor no PC e abra o controle no celular usando os links desta mesma sessão.</p>
     <div class="linkbox">
-      Controle: {{ request.url_root.rstrip('/') }}{{ url_for('control_room', room_id=room_id) }}<br>
-      Monitor: {{ request.url_root.rstrip('/') }}{{ url_for('monitor_room', room_id=room_id) }}
+      Controle: {{ control_url }}<br>
+      Monitor: {{ monitor_url }}
     </div>
   </main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+  const CONTROL_URL = {{ control_url|tojson }};
+  const MONITOR_URL = {{ monitor_url|tojson }};
+
+  function fallbackQr(id, url){
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.background = '#0b1430';
+    el.innerHTML = '<a href="' + url + '" target="_blank" rel="noopener noreferrer" style="color:#dbeafe;text-decoration:none;word-break:break-word;">Abrir link</a>';
+  }
+
+  function makeQr(id, url){
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = '';
+
+    if (typeof QRCode === 'undefined') {
+      fallbackQr(id, url);
+      return;
+    }
+
+    new QRCode(el, {
+      text: url,
+      width: 180,
+      height: 180,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  }
+
+  function copyLink(url, label){
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(() => {
+        alert(label + ' copiado.');
+      }).catch(() => {
+        prompt('Copie o link:', url);
+      });
+    } else {
+      prompt('Copie o link:', url);
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    makeQr('qrControl', CONTROL_URL);
+    makeQr('qrMonitor', MONITOR_URL);
+  });
+</script>
 </body>
 </html>
 """
@@ -2418,7 +2554,14 @@ def index():
 
 @app.route("/s/<room_id>")
 def session_home(room_id):
-    return render_template_string(HOME_HTML, room_id=room_id, request=request)
+    control_url = request.url_root.rstrip("/") + url_for("control_room", room_id=room_id)
+    monitor_url = request.url_root.rstrip("/") + url_for("monitor_room", room_id=room_id)
+    return render_template_string(
+        HOME_HTML,
+        room_id=room_id,
+        control_url=control_url,
+        monitor_url=monitor_url,
+    )
 
 @app.route("/s/<room_id>/control")
 def control_room(room_id):
