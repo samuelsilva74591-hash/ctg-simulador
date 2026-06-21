@@ -1,12 +1,104 @@
 import os
-from flask import Flask, redirect, url_for, render_template_string
-from flask_socketio import SocketIO, emit
+import secrets
+from flask import Flask, redirect, url_for, render_template_string, request
+from flask_socketio import SocketIO, emit, join_room
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get("SECRET_KEY", "dev-key")
 
 # Usar threading (evita eventlet/gevent em Windows)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+# ===================== TELA INICIAL (SESSÃO) =====================
+HOME_HTML = r"""
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<title>Sessão CTG</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(circle at top left, rgba(31,111,235,.20), transparent 34%),
+      linear-gradient(180deg, #08101f 0%, #0b1220 42%, #09111f 100%);
+    color:#e6edf3;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:18px;
+  }
+  .box {
+    width:min(560px, 94vw);
+    background:linear-gradient(180deg, rgba(16,26,51,.96), rgba(12,22,43,.96));
+    border:1px solid rgba(129,161,213,.22);
+    border-radius:18px;
+    padding:22px;
+    box-shadow:0 18px 40px rgba(0,0,0,.28);
+  }
+  h1 { margin:0 0 8px; font-size:24px; }
+  p { margin:8px 0; color:#c9d7ee; line-height:1.35; }
+  .code {
+    display:inline-block;
+    margin-top:6px;
+    padding:5px 10px;
+    border-radius:999px;
+    background:#122042;
+    border:1px solid #223058;
+    color:#dbeafe;
+    font-weight:800;
+  }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:16px 0 10px; }
+  a.btn {
+    display:block;
+    text-align:center;
+    padding:14px 12px;
+    border-radius:12px;
+    text-decoration:none;
+    color:#fff;
+    font-weight:800;
+    background:linear-gradient(180deg, #2f81f7, #1f6feb);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 8px 18px rgba(0,0,0,.18);
+  }
+  a.secondary { background:linear-gradient(180deg, #2ea043, #238636); }
+  .small { font-size:13px; opacity:.82; }
+  .linkbox {
+    margin-top:12px;
+    padding:10px;
+    border-radius:12px;
+    background:rgba(8,16,31,.38);
+    border:1px solid rgba(129,161,213,.15);
+    overflow-wrap:anywhere;
+    font-size:13px;
+    color:#c9d7ee;
+  }
+  @media (max-width: 640px) { .grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+  <main class="box">
+    <h1>Simulador CTG</h1>
+    <p>Esta é uma sessão individual. O controle desta sessão só interfere no monitor com o mesmo código.</p>
+    <p>Código da sessão: <span class="code">{{ room_id }}</span></p>
+
+    <div class="grid">
+      <a class="btn" href="{{ url_for('control_room', room_id=room_id) }}">Abrir controle</a>
+      <a class="btn secondary" href="{{ url_for('monitor_room', room_id=room_id) }}">Abrir monitor</a>
+    </div>
+
+    <p class="small">Exemplo: deixe o monitor no PC e abra o controle no celular usando os links desta mesma sessão.</p>
+    <div class="linkbox">
+      Controle: {{ request.url_root.rstrip('/') }}{{ url_for('control_room', room_id=room_id) }}<br>
+      Monitor: {{ request.url_root.rstrip('/') }}{{ url_for('monitor_room', room_id=room_id) }}
+    </div>
+  </main>
+</body>
+</html>
+"""
 
 # ===================== TELA 1 (CONTROLE) =====================
 CONTROL_HTML = r"""
@@ -327,7 +419,8 @@ CONTROL_HTML = r"""
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
 <script>
-  const socket = io();
+  const ROOM_ID = "{{ room_id }}";
+  const socket = io({ query: { room: ROOM_ID } });
   const clamp = (x,a,b)=> Math.max(a, Math.min(b, x));
   const log = (el, obj)=> { const e=document.getElementById(el); if(e) e.textContent = "Enviado: " + JSON.stringify(obj); };
   const send = (p)=> socket.emit('command', p);
@@ -795,7 +888,8 @@ MONITOR_HTML = r"""
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
 <script>
   // ===== Estado/HUD =====
-  const socket = io();
+  const ROOM_ID = "{{ room_id }}";
+  const socket = io({ query: { room: ROOM_ID } });
   const connEl  = document.getElementById('conn');
   const modeEl  = document.getElementById('mode');
   const modeTag = document.getElementById('modeTag');
@@ -2319,17 +2413,50 @@ if (laborAuto.enabled) {
 # ===================== ROTAS FLASK =====================
 @app.route("/")
 def index():
-    return redirect(url_for("control"))
+    room_id = secrets.token_urlsafe(5)
+    return redirect(url_for("session_home", room_id=room_id))
 
+@app.route("/s/<room_id>")
+def session_home(room_id):
+    return render_template_string(HOME_HTML, room_id=room_id, request=request)
+
+@app.route("/s/<room_id>/control")
+def control_room(room_id):
+    return render_template_string(CONTROL_HTML, room_id=room_id)
+
+@app.route("/s/<room_id>/monitor")
+def monitor_room(room_id):
+    return render_template_string(MONITOR_HTML, room_id=room_id)
+
+# Rotas antigas: mantidas para não quebrar o link, mas agora criam uma sessão nova.
 @app.route("/control")
-def control():
-    return render_template_string(CONTROL_HTML)
+def control_legacy():
+    room_id = secrets.token_urlsafe(5)
+    return redirect(url_for("control_room", room_id=room_id))
 
 @app.route("/monitor")
-def monitor():
-    return render_template_string(MONITOR_HTML)
+def monitor_legacy():
+    room_id = secrets.token_urlsafe(5)
+    return redirect(url_for("monitor_room", room_id=room_id))
 
 # ===================== SOCKET.IO ======================
+
+socket_rooms = {}
+
+@socketio.on("connect")
+def on_connect():
+    room_id = request.args.get("room") or "global"
+    socket_rooms[request.sid] = room_id
+    join_room(room_id)
+    emit("joined", {"room": room_id})
+
+@socketio.on("disconnect")
+def on_disconnect():
+    socket_rooms.pop(request.sid, None)
+
+def emit_command_to_room(command):
+    room_id = socket_rooms.get(request.sid, "global")
+    socketio.emit("command", command, to=room_id)
 
 @socketio.on("command")
 def on_command(payload):
@@ -2342,19 +2469,19 @@ def on_command(payload):
         clean = {"mode": mode}
         if isinstance(bpm, (int, float)):
             clean["bpm"] = max(40, min(240, int(bpm)))
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
     # ----- Contrações -----
     if mode == "uc_level" and isinstance(uc, (int, float)):
         clean = {"mode": "uc_level", "uc": max(0, min(100, int(uc)))}
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
     if mode == "uc_pause":
-        socketio.emit("command", {"mode": "uc_pause"})
+        emit_command_to_room({"mode": "uc_pause"})
         emit("ack", {"ok": True, "echo": {"mode": "uc_pause"}})
         return
 
@@ -2371,7 +2498,7 @@ def on_command(payload):
             "mode": "toco_tone",
             "tone": max(0, min(100, tone)),
         }
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
@@ -2389,7 +2516,7 @@ def on_command(payload):
             "peak": max(0, min(100, peak)),
             "duration_sec": max(5, min(70, duration_sec)),
         }
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
@@ -2403,7 +2530,7 @@ def on_command(payload):
             "count": 4,
             "window_ms": 600000,
         }
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
@@ -2411,7 +2538,7 @@ def on_command(payload):
     if mode == "band":
         show = bool(payload.get("show"))
         clean = {"mode": "band", "show": show}
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
@@ -2424,7 +2551,7 @@ def on_command(payload):
         else:
             base = max(0, min(240, base))
             clean = {"mode": "set_baseline", "bpm": base}
-            socketio.emit("command", clean)
+            emit_command_to_room(clean)
             emit("ack", {"ok": True, "echo": clean})
         return
 
@@ -2440,7 +2567,7 @@ def on_command(payload):
             vmax = max(0, min(80, vmax))
             if vmin > vmax: vmin, vmax = vmax, vmin
             clean = {"mode": "set_var", "vmin": vmin, "vmax": vmax}
-            socketio.emit("command", clean)
+            emit_command_to_room(clean)
             emit("ack", {"ok": True, "echo": clean})
         return
 
@@ -2450,7 +2577,7 @@ def on_command(payload):
         depth    = int(payload.get("depth", 30) or 30)
         duration = int(payload.get("duration", 60) or 60)
         clean = {"mode": "pattern", "pattern": pattern, "depth": depth, "duration": duration}
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
@@ -2464,7 +2591,7 @@ def on_command(payload):
         clean = {"mode": "reset"}
         if tone is not None:
             clean["tone"] = tone
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
@@ -2478,7 +2605,7 @@ def on_command(payload):
         clean = {"mode": "sinusoidal_toggle"}
         if tone is not None:
             clean["tone"] = tone
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
@@ -2492,7 +2619,7 @@ def on_command(payload):
         clean = {"mode": "hipersistolia_toggle"}
         if tone is not None:
             clean["tone"] = tone
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
@@ -2504,14 +2631,14 @@ def on_command(payload):
             base, vmin, vmax, uc0 = 140, 5, 25, 0
             tone_min, tone_max = 10, 10
 
-            socketio.emit("command", {"mode": "reset", "tone": tone_min})
-            socketio.emit("command", {"mode": "set_baseline", "bpm": base})
-            socketio.emit("command", {"mode": "set_var", "vmin": vmin, "vmax": vmax})
+            emit_command_to_room({"mode": "reset", "tone": tone_min})
+            emit_command_to_room({"mode": "set_baseline", "bpm": base})
+            emit_command_to_room({"mode": "set_var", "vmin": vmin, "vmax": vmax})
 
             # Sem contração periódica (UC=0)…
-            socketio.emit("command", {"mode": "uc_level", "uc": uc0})
+            emit_command_to_room({"mode": "uc_level", "uc": uc0})
             # …mas com tônus basal fixo em 10 mmHg:
-            socketio.emit("command", {
+            emit_command_to_room({
             "mode": "uc_pattern",
             "period_ms": 150000,   # irrelevante com UC=0, mas mantido por compat.
             "dur_ms": 13000,
@@ -2519,9 +2646,9 @@ def on_command(payload):
             "tone_max": tone_max
               })
 
-            socketio.emit("command", {"mode": "normal"})
+            emit_command_to_room({"mode": "normal"})
             # <-- DESARMA qualquer contador de trabalho de parto ativo no monitor
-            socketio.emit("command", {"mode": "labor_auto", "enabled": False})
+            emit_command_to_room({"mode": "labor_auto", "enabled": False})
 
             emit("ack", {"ok": True, "echo": {
              "mode": "apply_preset", "name": "normal",
@@ -2550,13 +2677,13 @@ def on_command(payload):
             tone = max(0, min(100, tone))
             tone_min, tone_max = tone, tone
 
-            socketio.emit("command", {"mode": "reset", "tone": tone_min})
-            socketio.emit("command", {"mode": "set_baseline", "bpm": base})
-            socketio.emit("command", {"mode": "set_var", "vmin": vmin, "vmax": vmax})
-            socketio.emit("command", {"mode": "normal"})
+            emit_command_to_room({"mode": "reset", "tone": tone_min})
+            emit_command_to_room({"mode": "set_baseline", "bpm": base})
+            emit_command_to_room({"mode": "set_var", "vmin": vmin, "vmax": vmax})
+            emit_command_to_room({"mode": "normal"})
             # Agenda as contrações como ondas individuais, começando do basal.
             # Isso evita que a primeira onda nasça no meio da fase periódica e forme degrau.
-            socketio.emit("command", {
+            emit_command_to_room({
                 "mode": "toco_normal",
                 "tone": tone_min,
                 "peak": uc_amp,
@@ -2564,7 +2691,7 @@ def on_command(payload):
                 "count": contractions,
                 "window_ms": 600000
             })
-            socketio.emit("command", {"mode": "labor_auto", "enabled": False})
+            emit_command_to_room({"mode": "labor_auto", "enabled": False})
 
             emit("ack", {"ok": True, "echo": {
                 "mode": "apply_preset", "name": f"labor_{contractions}",
@@ -2614,7 +2741,7 @@ def on_command(payload):
                 clean["tone_min"] = tmin
                 clean["tone_max"] = tmax
 
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
@@ -2636,7 +2763,7 @@ def on_command(payload):
             "window_ms": max(1000, window_ms),
             "period_ms": max(1000, period_ms),
         }
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
@@ -2649,7 +2776,7 @@ def on_command(payload):
             return
         factor = max(0.05, min(20.0, factor))
         clean = {"mode": "time_scale", "factor": factor}
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
@@ -2668,7 +2795,7 @@ def on_command(payload):
             "mode": mode,
             "label": variable_dip_labels[mode],
         }
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
@@ -2685,7 +2812,7 @@ def on_command(payload):
             "uc_peak": max(0, min(100, uc_peak)),
             "fhr_target": max(30, min(240, fhr_target)),
         }
-        socketio.emit("command", clean)           # envia p/ monitor
+        emit_command_to_room(clean)           # envia p/ monitor
         emit("ack", {"ok": True, "echo": clean})  # ack p/ controle
         return
     
@@ -2707,7 +2834,7 @@ def on_command(payload):
             "uc_duration_sec": max(1, uc_duration_sec),
             "uc_peak": max(0, min(100, uc_peak))
         }
-        socketio.emit("command", clean)            # envia p/ monitor
+        emit_command_to_room(clean)            # envia p/ monitor
         emit("ack", {"ok": True, "echo": clean})   # ack p/ controle
         return
 
@@ -2739,7 +2866,7 @@ def on_command(payload):
             "uc_duration_sec": max(1, uc_duration_sec),
             "uc_peak": max(0, min(100, uc_peak))
         }
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
@@ -2755,7 +2882,7 @@ def on_command(payload):
             "rise": max(1, min(60, rise)),
             "ripple": max(0, min(10, ripple)),
         }
-        socketio.emit("command", clean)
+        emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
 
