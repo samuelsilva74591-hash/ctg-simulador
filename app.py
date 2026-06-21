@@ -1629,8 +1629,8 @@ function buildGrids() {
   // Perfil de áudio:
   // PC fica com o som original.
   // Celular mantém o ajuste anterior.
-  // Tablet recebe um filtro extra anti-chiado, sem mexer no PC.
-  // Celular tem um chiado Doppler um pouco mais presente que a versão anterior.
+  // Tablet volta a ter o perfil Doppler mais completo, com whoosh e ruídos agudos,
+  // mas com o chiado basal um pouco menor que antes.
   const AUDIO_UA = navigator.userAgent || "";
   const AUDIO_HAS_TOUCH = navigator.maxTouchPoints > 1;
   const AUDIO_MIN_SCREEN = Math.min(screen.width || 0, screen.height || 0);
@@ -1724,14 +1724,14 @@ function buildGrids() {
 
     const hp = audioCtx.createBiquadFilter();
     hp.type = 'highpass';
-    hp.frequency.setValueAtTime(AUDIO_IS_TABLET ? 170 : (AUDIO_IS_MOBILE_OR_TABLET ? 120 : 180), audioCtx.currentTime);
+    hp.frequency.setValueAtTime(AUDIO_IS_TABLET ? 120 : (AUDIO_IS_MOBILE_OR_TABLET ? 120 : 180), audioCtx.currentTime);
 
     const lp = audioCtx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(AUDIO_IS_TABLET ? 520 : (AUDIO_IS_MOBILE_OR_TABLET ? 1000 : 1400), audioCtx.currentTime);
+    lp.frequency.setValueAtTime(AUDIO_IS_TABLET ? 900 : (AUDIO_IS_MOBILE_OR_TABLET ? 1000 : 1400), audioCtx.currentTime);
 
     const g = audioCtx.createGain();
-    g.gain.setValueAtTime(AUDIO_IS_TABLET ? 0.0012 : (AUDIO_IS_MOBILE_OR_TABLET ? 0.0062 : 0.014), audioCtx.currentTime);
+    g.gain.setValueAtTime(AUDIO_IS_TABLET ? 0.0038 : (AUDIO_IS_MOBILE_OR_TABLET ? 0.0062 : 0.014), audioCtx.currentTime);
 
     src.connect(hp).connect(lp).connect(g).connect(sonarMaster);
     src.start();
@@ -1749,10 +1749,10 @@ function buildGrids() {
 
     const lp = audioCtx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(AUDIO_IS_TABLET ? 130 : (AUDIO_IS_MOBILE_OR_TABLET ? 150 : 170), audioCtx.currentTime);
+    lp.frequency.setValueAtTime(AUDIO_IS_TABLET ? 150 : (AUDIO_IS_MOBILE_OR_TABLET ? 150 : 170), audioCtx.currentTime);
 
     placentaGain = audioCtx.createGain();
-    placentaGain.gain.setValueAtTime(AUDIO_IS_TABLET ? 0.010 : (AUDIO_IS_MOBILE_OR_TABLET ? 0.014 : 0.018), audioCtx.currentTime);
+    placentaGain.gain.setValueAtTime(AUDIO_IS_TABLET ? 0.014 : (AUDIO_IS_MOBILE_OR_TABLET ? 0.014 : 0.018), audioCtx.currentTime);
 
     placentaOsc.connect(lp).connect(placentaGain).connect(sonarMaster);
     placentaOsc.start();
@@ -1793,15 +1793,15 @@ function buildGrids() {
 
     const bp = audioCtx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.setValueAtTime(AUDIO_IS_TABLET ? Math.min(centerFreq, 280) : (AUDIO_IS_MOBILE_OR_TABLET ? Math.min(centerFreq, 390) : centerFreq), startTime);
-    bp.Q.setValueAtTime(AUDIO_IS_TABLET ? Math.max(0.28, q * 0.42) : (AUDIO_IS_MOBILE_OR_TABLET ? Math.max(0.45, q * 0.65) : q), startTime);
+    bp.frequency.setValueAtTime(AUDIO_IS_TABLET ? Math.min(centerFreq, 360) : (AUDIO_IS_MOBILE_OR_TABLET ? Math.min(centerFreq, 390) : centerFreq), startTime);
+    bp.Q.setValueAtTime(AUDIO_IS_TABLET ? Math.max(0.45, q * 0.65) : (AUDIO_IS_MOBILE_OR_TABLET ? Math.max(0.45, q * 0.65) : q), startTime);
 
     const lp = audioCtx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(AUDIO_IS_TABLET ? 390 : (AUDIO_IS_MOBILE_OR_TABLET ? 700 : 900), startTime);
+    lp.frequency.setValueAtTime(AUDIO_IS_TABLET ? 620 : (AUDIO_IS_MOBILE_OR_TABLET ? 700 : 900), startTime);
 
     const g = audioCtx.createGain();
-    const safeAmp = AUDIO_IS_TABLET ? amp * 0.10 : (AUDIO_IS_MOBILE_OR_TABLET ? amp * 0.38 : amp);
+    const safeAmp = AUDIO_IS_TABLET ? amp * 0.32 : (AUDIO_IS_MOBILE_OR_TABLET ? amp * 0.38 : amp);
     g.gain.setValueAtTime(0.0001, startTime);
     g.gain.exponentialRampToValueAtTime(Math.max(0.0002, safeAmp), startTime + 0.012);
     g.gain.exponentialRampToValueAtTime(0.0001, startTime + dur);
@@ -1828,13 +1828,13 @@ function buildGrids() {
     const lp = audioCtx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.setValueAtTime(
-      AUDIO_IS_TABLET ? (secondClick ? 330 : 370) : (AUDIO_IS_MOBILE_OR_TABLET ? (secondClick ? 390 : 450) : (secondClick ? 480 : 560)),
+      AUDIO_IS_TABLET ? (secondClick ? 390 : 450) : (AUDIO_IS_MOBILE_OR_TABLET ? (secondClick ? 390 : 450) : (secondClick ? 480 : 560)),
       startTime
     );
-    lp.Q.setValueAtTime(AUDIO_IS_TABLET ? 0.32 : (AUDIO_IS_MOBILE_OR_TABLET ? 0.45 : 0.65), startTime);
+    lp.Q.setValueAtTime(AUDIO_IS_TABLET ? 0.45 : (AUDIO_IS_MOBILE_OR_TABLET ? 0.45 : 0.65), startTime);
 
     const g = audioCtx.createGain();
-    const thumpAmp = AUDIO_IS_TABLET ? amp * 0.88 : (AUDIO_IS_MOBILE_OR_TABLET ? amp * 0.94 : amp);
+    const thumpAmp = AUDIO_IS_TABLET ? amp * 0.94 : (AUDIO_IS_MOBILE_OR_TABLET ? amp * 0.94 : amp);
     g.gain.setValueAtTime(0.0001, startTime);
     g.gain.exponentialRampToValueAtTime(Math.max(0.0002, thumpAmp), startTime + 0.014);
     g.gain.exponentialRampToValueAtTime(0.0001, startTime + dur);
@@ -1856,13 +1856,13 @@ function buildGrids() {
 
     const bp = audioCtx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.setValueAtTime(AUDIO_IS_TABLET ? 160 : (AUDIO_IS_MOBILE_OR_TABLET ? 220 : 260), t);
-    bp.frequency.exponentialRampToValueAtTime(AUDIO_IS_TABLET ? 320 : (AUDIO_IS_MOBILE_OR_TABLET ? 520 : 900), t + 0.38);
-    bp.Q.setValueAtTime(AUDIO_IS_TABLET ? 0.28 : (AUDIO_IS_MOBILE_OR_TABLET ? 0.45 : 0.7), t);
+    bp.frequency.setValueAtTime(AUDIO_IS_TABLET ? 220 : (AUDIO_IS_MOBILE_OR_TABLET ? 220 : 260), t);
+    bp.frequency.exponentialRampToValueAtTime(AUDIO_IS_TABLET ? 520 : (AUDIO_IS_MOBILE_OR_TABLET ? 520 : 900), t + 0.38);
+    bp.Q.setValueAtTime(AUDIO_IS_TABLET ? 0.45 : (AUDIO_IS_MOBILE_OR_TABLET ? 0.45 : 0.7), t);
 
     const g = audioCtx.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(AUDIO_IS_TABLET ? 0.006 : (AUDIO_IS_MOBILE_OR_TABLET ? 0.035 : 0.12), t + 0.05);
+    g.gain.exponentialRampToValueAtTime(AUDIO_IS_TABLET ? 0.035 : (AUDIO_IS_MOBILE_OR_TABLET ? 0.035 : 0.12), t + 0.05);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
 
     src.connect(bp).connect(g).connect(sonarMaster);
@@ -1878,14 +1878,14 @@ function buildGrids() {
     const mechanical = !!state.sinusoidalOn;
 
     // Batimento fetal Doppler: TUM-tum. No sinusoidal ele fica frio, regular e sem whoosh aleatório.
-    const firstAmp = AUDIO_IS_TABLET ? (mechanical ? 0.21 : 0.25) : (AUDIO_IS_MOBILE_OR_TABLET ? (mechanical ? 0.24 : 0.28) : (mechanical ? 0.26 : 0.30));
-    const secondAmp = AUDIO_IS_TABLET ? (mechanical ? 0.10 : 0.13) : (AUDIO_IS_MOBILE_OR_TABLET ? (mechanical ? 0.13 : 0.16) : (mechanical ? 0.15 : 0.18));
+    const firstAmp = AUDIO_IS_TABLET ? (mechanical ? 0.24 : 0.28) : (AUDIO_IS_MOBILE_OR_TABLET ? (mechanical ? 0.24 : 0.28) : (mechanical ? 0.26 : 0.30));
+    const secondAmp = AUDIO_IS_TABLET ? (mechanical ? 0.13 : 0.16) : (AUDIO_IS_MOBILE_OR_TABLET ? (mechanical ? 0.13 : 0.16) : (mechanical ? 0.15 : 0.18));
     createDopplerThump(t, firstAmp, bpm, false, mechanical);
     createDopplerThump(t + 0.085, secondAmp, bpm, true, mechanical);
 
     // Interferência discreta ocasional só fora do padrão sinusoidal.
     // No celular/tablet, fica mais rara para reduzir chiado de alto-falante pequeno.
-    const whooshChance = AUDIO_IS_TABLET ? 0.00025 : (AUDIO_IS_MOBILE_OR_TABLET ? 0.0015 : 0.006);
+    const whooshChance = AUDIO_IS_TABLET ? 0.0015 : (AUDIO_IS_MOBILE_OR_TABLET ? 0.0015 : 0.006);
     if (!mechanical && Math.random() < whooshChance) fetalMovementWhoosh();
   }
 
