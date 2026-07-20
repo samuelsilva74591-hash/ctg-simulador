@@ -2495,7 +2495,8 @@ scheduleUCOneShot(peak, Math.max(1000, ucDurSec * 1000), 0.22);
 let pxCarryHR = 0; // acumulador de pixels FHR
 let pxCarryUC = 0; // acumulador de pixels TOCO
 // Média para estabilizar o visor da FHR
-let bpmDisplay = 140;
+let bpmDisplay = null;
+let lastBpmUpdate = 0;
 
 function loop(ts){
   const dtReal = Math.min(32, ts - lastTS);
@@ -2515,10 +2516,13 @@ function loop(ts){
   if (advHR < 1) advHR = 0;
   pxCarryHR -= advHR;
 
-  // amostra do sinal com o mesmo tempo CTG usado pela rolagem
-  const s = sampleFHR(dtCTG, ctgNowMs);
-  const yNew = bpmToY(s.bpm, h1);
-// Filtro exponencial para suavizar o número do visor
+const s = sampleFHR(dtCTG, ctgNowMs);
+const yNew = bpmToY(s.bpm, h1);
+
+if (bpmDisplay === null) {
+    bpmDisplay = s.bpm;
+}
+
 const alpha = 0.05;
 bpmDisplay += (s.bpm - bpmDisplay) * alpha;
 
@@ -2610,8 +2614,11 @@ if (laborAuto.enabled) {
   const shownModeLoop = state.hipersistoliaOn ? 'hipersistolia' : (state.sinusoidalOn ? 'sinusoidal' : state.mode);
   modeEl.textContent = shownModeLoop;
   modeTag.textContent = shownModeLoop;
-bpmEl.textContent  = Math.round(bpmDisplay);
-bpmBig.textContent = Math.round(bpmDisplay);
+if (ts - lastBpmUpdate >= 600) {
+    bpmEl.textContent  = Math.round(bpmDisplay);
+    bpmBig.textContent = Math.round(bpmDisplay);
+    lastBpmUpdate = ts;
+}
   ucEl.textContent   = Math.round(valUC);
   ucBig.textContent  = Math.round(valUC);
   clockEl.textContent = new Date().toLocaleTimeString();
