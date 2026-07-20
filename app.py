@@ -2519,7 +2519,7 @@ function loop(ts){
   const s = sampleFHR(dtCTG, ctgNowMs);
   const yNew = bpmToY(s.bpm, h1);
 // Filtro exponencial para suavizar o número do visor
-const alpha = 0.06;
+const alpha = 0.05;
 bpmDisplay += (s.bpm - bpmDisplay) * alpha;
 
   if (advHR > 0){
