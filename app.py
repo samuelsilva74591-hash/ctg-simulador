@@ -504,21 +504,21 @@ CONTROL_HTML = r"""
 
 <!-- CARD: EVENTOS OBSTÉTRICOS -->
 <div class="card wide">
-  <h3 style="margin:0 0 10px">Eventos — Aceleração e DIPs</h3>
+  <h3 style="margin:0 0 10px">Eventos — Aceleração e Desacelerações</h3>
   <div class="muted">Eventos temporários. Enquanto um evento estiver ativo, outro comando de DIP/aceleração é ignorado até terminar.</div>
 
   <div class="hr"></div>
 
   <div class="eventsGrid">
     <button id="btn_acel" class="btn green" onclick="sendAceleracaoTransitoria()">Aceleração transitória</button>
-    <button id="btn_dip_precoce" class="btn green" onclick="sendDIPIVerdadeira()">DIP precoce</button>
-    <button id="btn_dip_tardia" class="btn yellow" onclick="sendDIPTardia()">DIP tardia</button>
-    <button id="btn_var_v_con" class="btn yellow" onclick="sendDIPVarVContracao()">DIP variável V com onda</button>
-    <button id="btn_var_v_sem" class="btn yellow" onclick="sendDIPVarVSemContracao()">DIP variável V sem onda</button>
-    <button id="btn_var_u_con" class="btn yellow" onclick="sendDIPVarUContracao()">DIP variável U com onda</button>
-    <button id="btn_var_u_sem" class="btn yellow" onclick="sendDIPVarUSemContracao()">DIP variável U sem onda</button>
-    <button id="btn_var_w_con" class="btn yellow" onclick="sendDIPVarWContracao()">DIP variável W com onda</button>
-    <button id="btn_var_w_sem" class="btn yellow" onclick="sendDIPVarWSemContracao()">DIP variável W sem onda</button>
+    <button id="btn_dip_precoce" class="btn green" onclick="sendDIPIVerdadeira()">Desaceleração precoce</button>
+    <button id="btn_dip_tardia" class="btn yellow" onclick="sendDIPTardia()">Desaceleração tardia</button>
+    <button id="btn_var_v_con" class="btn yellow" onclick="sendDIPVarVContracao()">Desaceleração variável V com ombros</button>
+    <button id="btn_var_v_sem" class="btn yellow" onclick="sendDIPVarVSemContracao()">Desaceleração variável V sem ombros</button>
+    <button id="btn_var_u_con" class="btn yellow" onclick="sendDIPVarUContracao()">Desaceleração variável U com ombros</button>
+    <button id="btn_var_u_sem" class="btn yellow" onclick="sendDIPVarUSemContracao()">Desaceleração variável U sem ombros</button>
+    <button id="btn_var_w_con" class="btn yellow" onclick="sendDIPVarWContracao()">Desaceleração variável W com ombros</button>
+    <button id="btn_var_w_sem" class="btn yellow" onclick="sendDIPVarWSemContracao()">Desaceleração variável W sem ombros</button>
   </div>
 
   <div class="hr"></div>
@@ -784,55 +784,55 @@ CONTROL_HTML = r"""
     }
 
     if (e.mode === 'dip_variavel_v_contracao') {
-      document.getElementById('cfg_mode').textContent = 'DIP variável V com onda';
+      document.getElementById('cfg_mode').textContent = 'Desaceleração variável V com ombros';
       document.getElementById('cfg_uc').textContent =
         'TOCO 60s até 50 mmHg; ombro +15 bpm antes e depois; queda de 60 bpm em 10s com nadir no pico da contração';
       return;
     }
 
     if (e.mode === 'dip_variavel_v_sem_contracao') {
-      document.getElementById('cfg_mode').textContent = 'DIP variável V sem onda';
+      document.getElementById('cfg_mode').textContent = 'Desaceleração variável V sem ombros';
       document.getElementById('cfg_uc').textContent =
         'Sem TOCO; FHR cai 45 bpm em 12s e sobe em 13s';
       return;
     }
 
     if (e.mode === 'dip_variavel_u_contracao') {
-      document.getElementById('cfg_mode').textContent = 'DIP variável U com onda';
+      document.getElementById('cfg_mode').textContent = 'Desaceleração variável U com ombros';
       document.getElementById('cfg_uc').textContent =
         'TOCO 60s até 50 mmHg; FHR cai 70 bpm, fica 30s no nadir e normaliza 20s após a contração';
       return;
     }
 
     if (e.mode === 'dip_variavel_u_sem_contracao') {
-      document.getElementById('cfg_mode').textContent = 'DIP variável U sem onda';
+      document.getElementById('cfg_mode').textContent = 'Desaceleração variável U sem ombros';
       document.getElementById('cfg_uc').textContent =
         'Sem TOCO; FHR cai 60 bpm em 20s, mantém 40s no nadir e retorna em 25s';
       return;
     }
 
     if (e.mode === 'dip_variavel_w_contracao') {
-      document.getElementById('cfg_mode').textContent = 'DIP variável W com onda';
+      document.getElementById('cfg_mode').textContent = 'Desaceleração variável W com ombros';
       document.getElementById('cfg_uc').textContent =
         'TOCO 60s até 50 mmHg; W inicia no 10º segundo, com duas quedas e recuperação em 20s';
       return;
     }
 
     if (e.mode === 'dip_variavel_w_sem_contracao') {
-      document.getElementById('cfg_mode').textContent = 'DIP variável W sem onda';
+      document.getElementById('cfg_mode').textContent = 'Desaceleração variável W sem ombros';
       document.getElementById('cfg_uc').textContent =
         'Sem TOCO; queda 50 bpm, recuperação parcial, nova queda 35 bpm e retorno em 15s';
       return;
     }
 
     if (e.mode === 'dip_variavel') {
-      document.getElementById('cfg_mode').textContent = 'DIP variável';
+      document.getElementById('cfg_mode').textContent = 'Desaceleração variável';
       document.getElementById('cfg_uc').textContent = `TOCO 60s até ${e.uc_peak ?? 50} + FHR em V por ${e.duration ?? 40}s até ${e.fhr_target ?? 100} bpm`;
       return;
     }
 
     if (e.mode === 'dipi_precoce_verdadeira') {
-      document.getElementById('cfg_mode').textContent = 'DIP precoce';
+      document.getElementById('cfg_mode').textContent = 'Desaceleração precoce';
       document.getElementById('cfg_uc').textContent =
         `TOCO 60s até ${e.uc_peak ?? 50} (pico no vale); ` +
         `FHR em V por ${e.fhr_total_sec ?? 40}s até ${e.fhr_target ?? 100} (nadir no pico da TOCO)`;
@@ -840,7 +840,7 @@ CONTROL_HTML = r"""
     }
 
     if (e.mode === 'dip_tardia') {
-      document.getElementById('cfg_mode').textContent = 'DIP tardia';
+      document.getElementById('cfg_mode').textContent = 'Desaceleração tardia';
       document.getElementById('cfg_uc').textContent =
         `TOCO 60s até ${e.uc_peak ?? 50}; ` +
         `FHR tardia: queda 30s até o nadir, nadir 40s após o pico da TOCO, retorno em 60s ao basal`;
@@ -2494,6 +2494,8 @@ scheduleUCOneShot(peak, Math.max(1000, ucDurSec * 1000), 0.22);
 // ocupam sempre 15s na grade; em 10x apenas passam 10x mais rápido na vida real.
 let pxCarryHR = 0; // acumulador de pixels FHR
 let pxCarryUC = 0; // acumulador de pixels TOCO
+// Média para estabilizar o visor da FHR
+let bpmDisplay = 140;
 
 function loop(ts){
   const dtReal = Math.min(32, ts - lastTS);
@@ -2516,6 +2518,9 @@ function loop(ts){
   // amostra do sinal com o mesmo tempo CTG usado pela rolagem
   const s = sampleFHR(dtCTG, ctgNowMs);
   const yNew = bpmToY(s.bpm, h1);
+// Filtro exponencial para suavizar o número do visor
+const alpha = 0.06;
+bpmDisplay += (s.bpm - bpmDisplay) * alpha;
 
   if (advHR > 0){
     hrx.clearRect(xHR, 0, advHR, h1);
@@ -2605,8 +2610,8 @@ if (laborAuto.enabled) {
   const shownModeLoop = state.hipersistoliaOn ? 'hipersistolia' : (state.sinusoidalOn ? 'sinusoidal' : state.mode);
   modeEl.textContent = shownModeLoop;
   modeTag.textContent = shownModeLoop;
-  bpmEl.textContent  = Math.round(s.bpm);
-  bpmBig.textContent = Math.round(s.bpm);
+bpmEl.textContent  = Math.round(bpmDisplay);
+bpmBig.textContent = Math.round(bpmDisplay);
   ucEl.textContent   = Math.round(valUC);
   ucBig.textContent  = Math.round(valUC);
   clockEl.textContent = new Date().toLocaleTimeString();
