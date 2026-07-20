@@ -1034,6 +1034,8 @@ MONITOR_HTML = r"""
   const ucEl    = document.getElementById('uc');
   const ucBig   = document.getElementById('ucBig');
   const clockEl = document.getElementById('clock');
+  const DISPLAY_ALPHA = 0.05;
+  const DISPLAY_UPDATE_MS = 600;
 
 // --- helpers de forma (usados pelo monitor) ---
 function clamp01(t){ return Math.max(0, Math.min(1, t)); }
@@ -2523,8 +2525,8 @@ if (bpmDisplay === null) {
     bpmDisplay = s.bpm;
 }
 
-const alpha = 0.05;
-bpmDisplay += (s.bpm - bpmDisplay) * alpha;
+bpmDisplay += (s.bpm - bpmDisplay) * DISPLAY_ALPHA;
+
 
   if (advHR > 0){
     hrx.clearRect(xHR, 0, advHR, h1);
@@ -2614,7 +2616,7 @@ if (laborAuto.enabled) {
   const shownModeLoop = state.hipersistoliaOn ? 'hipersistolia' : (state.sinusoidalOn ? 'sinusoidal' : state.mode);
   modeEl.textContent = shownModeLoop;
   modeTag.textContent = shownModeLoop;
-if (ts - lastBpmUpdate >= 600) {
+if (ts - lastBpmUpdate >= DISPLAY_UPDATE_MS) {
     bpmEl.textContent  = Math.round(bpmDisplay);
     bpmBig.textContent = Math.round(bpmDisplay);
     lastBpmUpdate = ts;
