@@ -540,7 +540,6 @@ CONTROL_HTML = r"""
 
   <div class="scenarioGrid">
     <button id="btn_basal" class="btn" onclick="sendPresetNormal()">Basal / Repouso</button>
-    <button id="btn_sinusoidal" class="btn danger" onclick="sendSinusoidalToggle()">Padrão sinusoidal: ligar/desligar</button>
     <button id="btn_hiper" class="btn danger" onclick="sendHipersistoliaToggle()">Hipersistolia</button>
     <button id="btn_labor_1" class="btn" onclick="sendLaborRate(1)">Trabalho de parto 1/10</button>
     <button id="btn_labor_2" class="btn" onclick="sendLaborRate(2)">Trabalho de parto 2/10</button>
@@ -549,6 +548,56 @@ CONTROL_HTML = r"""
     <button id="btn_labor_5" class="btn" onclick="sendLaborRate(5)">Trabalho de parto 5/10</button>
   </div>
 </div>
+
+<div class="card">
+
+<h3 style="margin:0 0 10px">
+🚨 Cenários Críticos
+</h3>
+
+<div class="muted">
+Configurações específicas para padrões críticos da FCF.
+</div>
+
+<div class="hr"></div>
+
+<button
+id="btn_sinusoidal"
+class="btn danger"
+onclick="sendSinusoidalToggle()">
+
+Padrão sinusoidal
+</button>
+
+</div>
+
+<div style="height:12px"></div>
+
+<label>
+Amplitude da onda
+<span id="sin_amp_lbl">5 bpm</span>
+</label>
+
+<input
+id="sin_amp"
+type="range"
+min="3"
+max="15"
+step="1"
+value="5">
+
+<label>
+Frequência da onda
+<span id="sin_freq_lbl">3 ciclos/min</span>
+</label>
+
+<input
+id="sin_freq"
+type="range"
+min="2"
+max="5"
+step="1"
+value="3">
 
   </div> <!-- fecha .cardsGrid -->
 </div>   <!-- fecha .wrap -->
@@ -589,6 +638,19 @@ CONTROL_HTML = r"""
     document.getElementById('speed_num').value   = n.toFixed(2);
     document.getElementById('speedpill').textContent = n.toFixed(2) + '×';
   }
+  document.getElementById("sin_amp").oninput = function(){
+
+document.getElementById("sin_amp_lbl").textContent =
+this.value + " bpm";
+
+};
+
+document.getElementById("sin_freq").oninput = function(){
+
+document.getElementById("sin_freq_lbl").textContent =
+this.value + " ciclos/min";
+
+};
   function sendTimeScale(){
     const factor = getSpeed();
     const payload = { mode:'time_scale', factor };
@@ -668,40 +730,38 @@ CONTROL_HTML = r"""
   function sendDIPIVerdadeira(){ sendObstEvent('dipi_precoce_verdadeira', 60); }
   function sendDIPTardia(){ sendObstEvent('dip_tardia', 130); }
   function sendAceleracaoTransitoria(){ sendObstEvent('acel_transitoria', 20); }
-  function sendSinusoidalToggle(){
-    sinusoidalActiveUi = !sinusoidalActiveUi;
-    if (sinusoidalActiveUi) {
-      hipersistoliaActiveUi = false;
-      unlockLaborButtons();
-      setScenarioActive('btn_hiper', false);
-    }
-    setScenarioActive('btn_sinusoidal', sinusoidalActiveUi);
-    socket.emit('command', { mode: 'sinusoidal_toggle', tone:getTocoTone() });
-  }
-  function sendHipersistoliaToggle(){
-    hipersistoliaActiveUi = !hipersistoliaActiveUi;
-    if (hipersistoliaActiveUi) {
-      sinusoidalActiveUi = false;
-      unlockLaborButtons();
-      setScenarioActive('btn_sinusoidal', false);
-    }
-    setScenarioActive('btn_hiper', hipersistoliaActiveUi);
-    socket.emit('command', { mode: 'hipersistolia_toggle', tone:getTocoTone() });
-  }
-  function sendLaborRate(n){
-    if (laborBtnIds.some(id => btn(id)?.disabled)) return;
-    sinusoidalActiveUi = false;
-    hipersistoliaActiveUi = false;
-    setScenarioActive('btn_sinusoidal', false);
-    setScenarioActive('btn_hiper', false);
-    lockLaborButtons(n);
-    socket.emit('command', {
-      mode:'apply_preset',
-      name:'labor_' + n,
-      tone:getTocoTone()
-    });
-  }
 
+function sendSinusoidalToggle(){
+
+    sinusoidalActiveUi = !sinusoidalActiveUi;
+
+    if (sinusoidalActiveUi) {
+        hipersistoliaActiveUi = false;
+        unlockLaborButtons();
+        setScenarioActive('btn_hiper', false);
+    }
+
+    setScenarioActive('btn_sinusoidal', sinusoidalActiveUi);
+
+    sinusoidalAmp =
+        parseInt(document.getElementById("sin_amp").value);
+
+    sinusoidalFreq =
+        parseInt(document.getElementById("sin_freq").value);
+
+    socket.emit('command', {
+
+        mode: 'sinusoidal_toggle',
+
+        tone: getTocoTone(),
+
+        amp: sinusoidalAmp,
+
+        freq: sinusoidalFreq
+
+    });
+
+}
   // Dicas (baseline ± metade da variação total)
   function updateRangeHints(){
     const base = getBase(), vmin = getVMin(), vmax = getVMax();
@@ -1082,12 +1142,27 @@ function asymVShape01(x, nadirFrac=0.40){
 
 // Padrão sinusoidal: senoide mecânica, mais espaçada e sem variabilidade basal.
 // Ciclo de 40s: 140 → 145 → 140 → 135 → 140, com áudio previsível e hipnótico.
-const SINUSOIDAL_PERIOD_MS = 40000;
-const SINUSOIDAL_AMP_BPM = 5;
+let sinusoidalAmp = 5;
+let sinusoidalFreq = 3;
 function sinusoidalOffset(nowMs){
   if (!state.sinusoidalOn) return 0;
-  const phase = (((nowMs - state.sinusoidalStartMs) % SINUSOIDAL_PERIOD_MS) + SINUSOIDAL_PERIOD_MS) % SINUSOIDAL_PERIOD_MS;
-  return SINUSOIDAL_AMP_BPM * Math.sin((2 * Math.PI * phase) / SINUSOIDAL_PERIOD_MS);
+const period =
+60000 / sinusoidalFreq;
+
+const phase =
+(((nowMs-state.sinusoidalStartMs)
+%
+period)
++
+period)
+%
+period;
+
+return sinusoidalAmp
+*
+Math.sin(
+2*Math.PI*phase/period
+);
 }
 
 // Hipersistolia: 6 contrações/10min, contrações longas, pouco repouso e hipertonia.
