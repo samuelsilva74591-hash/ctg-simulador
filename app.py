@@ -549,55 +549,36 @@ CONTROL_HTML = r"""
   </div>
 </div>
 
-<div class="card">
+<!-- CARD: CENÁRIO CRÍTICO -->
+<div class="card wide">
+  <h3 style="margin:0 0 10px">Cenário crítico</h3>
+  <div class="muted">Configure a amplitude e a frequência do padrão sinusoidal antes de ligá-lo. O botão continua funcionando como liga/desliga.</div>
 
-<h3 style="margin:0 0 10px">
-🚨 Cenários Críticos
-</h3>
+  <div class="hr"></div>
 
-<div class="muted">
-Configurações específicas para padrões críticos da FCF.
+  <div class="btngrid2">
+    <div>
+      <label>Amplitude da onda (± bpm) <span class="pill" id="sin_amp_pill">5</span></label>
+      <div class="row">
+        <input id="sin_amp_range" type="range" min="1" max="30" step="1" value="5" oninput="syncSinAmplitude(this.value)">
+        <input id="sin_amp" type="number" min="1" max="30" step="1" value="5" oninput="syncSinAmplitude(this.value)">
+      </div>
+    </div>
+
+    <div>
+      <label>Frequência (ciclos por minuto) <span class="pill" id="sin_freq_pill">1,5</span></label>
+      <div class="row">
+        <input id="sin_freq_range" type="range" min="0.2" max="6" step="0.1" value="1.5" oninput="syncSinFrequency(this.value)">
+        <input id="sin_freq" type="number" min="0.2" max="6" step="0.1" value="1.5" oninput="syncSinFrequency(this.value)">
+      </div>
+    </div>
+  </div>
+
+  <div style="height:8px"></div>
+  <button id="btn_sinusoidal" class="btn danger" onclick="sendSinusoidalToggle()">Padrão sinusoidal: ligar/desligar</button>
+
+  <div class="status" id="sin_status">Padrão configurado: amplitude ±5 bpm; frequência 1,5 ciclo/min (período de 40s).</div>
 </div>
-
-<div class="hr"></div>
-
-<button
-id="btn_sinusoidal"
-class="btn danger"
-onclick="sendSinusoidalToggle()">
-
-Padrão sinusoidal
-</button>
-
-</div>
-
-<div style="height:12px"></div>
-
-<label>
-Amplitude da onda
-<span id="sin_amp_lbl">5 bpm</span>
-</label>
-
-<input
-id="sin_amp"
-type="range"
-min="3"
-max="15"
-step="1"
-value="5">
-
-<label>
-Frequência da onda
-<span id="sin_freq_lbl">3 ciclos/min</span>
-</label>
-
-<input
-id="sin_freq"
-type="range"
-min="2"
-max="5"
-step="1"
-value="3">
 
   </div> <!-- fecha .cardsGrid -->
 </div>   <!-- fecha .wrap -->
@@ -638,19 +619,6 @@ value="3">
     document.getElementById('speed_num').value   = n.toFixed(2);
     document.getElementById('speedpill').textContent = n.toFixed(2) + '×';
   }
-  document.getElementById("sin_amp").oninput = function(){
-
-document.getElementById("sin_amp_lbl").textContent =
-this.value + " bpm";
-
-};
-
-document.getElementById("sin_freq").oninput = function(){
-
-document.getElementById("sin_freq_lbl").textContent =
-this.value + " ciclos/min";
-
-};
   function sendTimeScale(){
     const factor = getSpeed();
     const payload = { mode:'time_scale', factor };
@@ -730,38 +698,76 @@ this.value + " ciclos/min";
   function sendDIPIVerdadeira(){ sendObstEvent('dipi_precoce_verdadeira', 60); }
   function sendDIPTardia(){ sendObstEvent('dip_tardia', 130); }
   function sendAceleracaoTransitoria(){ sendObstEvent('acel_transitoria', 20); }
-
-function sendSinusoidalToggle(){
-
+  function getSinAmplitude(){
+    const v = parseFloat(document.getElementById('sin_amp').value);
+    return isNaN(v) ? 5 : Math.max(1, Math.min(30, v));
+  }
+  function getSinFrequency(){
+    const v = parseFloat(document.getElementById('sin_freq').value);
+    return isNaN(v) ? 1.5 : Math.max(0.2, Math.min(6, v));
+  }
+  function updateSinStatus(){
+    const amp = getSinAmplitude();
+    const freq = getSinFrequency();
+    const period = 60 / freq;
+    const el = document.getElementById('sin_status');
+    if (el) el.textContent = `Padrão configurado: amplitude ±${amp.toFixed(0)} bpm; frequência ${freq.toFixed(1).replace('.', ',')} ciclo/min (período de ${period.toFixed(1).replace('.', ',')}s).`;
+  }
+  function syncSinAmplitude(v){
+    let n = parseFloat(v); if (isNaN(n)) n = 5;
+    n = Math.max(1, Math.min(30, n));
+    document.getElementById('sin_amp_range').value = n;
+    document.getElementById('sin_amp').value = n.toFixed(0);
+    document.getElementById('sin_amp_pill').textContent = n.toFixed(0);
+    updateSinStatus();
+  }
+  function syncSinFrequency(v){
+    let n = parseFloat(v); if (isNaN(n)) n = 1.5;
+    n = Math.max(0.2, Math.min(6, n));
+    document.getElementById('sin_freq_range').value = n;
+    document.getElementById('sin_freq').value = n.toFixed(1);
+    document.getElementById('sin_freq_pill').textContent = n.toFixed(1).replace('.', ',');
+    updateSinStatus();
+  }
+  function sendSinusoidalToggle(){
     sinusoidalActiveUi = !sinusoidalActiveUi;
-
     if (sinusoidalActiveUi) {
-        hipersistoliaActiveUi = false;
-        unlockLaborButtons();
-        setScenarioActive('btn_hiper', false);
+      hipersistoliaActiveUi = false;
+      unlockLaborButtons();
+      setScenarioActive('btn_hiper', false);
     }
-
     setScenarioActive('btn_sinusoidal', sinusoidalActiveUi);
-
-    sinusoidalAmp =
-        parseInt(document.getElementById("sin_amp").value);
-
-    sinusoidalFreq =
-        parseInt(document.getElementById("sin_freq").value);
-
     socket.emit('command', {
-
-        mode: 'sinusoidal_toggle',
-
-        tone: getTocoTone(),
-
-        amp: sinusoidalAmp,
-
-        freq: sinusoidalFreq
-
+      mode: 'sinusoidal_toggle',
+      tone: getTocoTone(),
+      amp: getSinAmplitude(),
+      freq: getSinFrequency()
     });
+  }
+  function sendHipersistoliaToggle(){
+    hipersistoliaActiveUi = !hipersistoliaActiveUi;
+    if (hipersistoliaActiveUi) {
+      sinusoidalActiveUi = false;
+      unlockLaborButtons();
+      setScenarioActive('btn_sinusoidal', false);
+    }
+    setScenarioActive('btn_hiper', hipersistoliaActiveUi);
+    socket.emit('command', { mode: 'hipersistolia_toggle', tone:getTocoTone() });
+  }
+  function sendLaborRate(n){
+    if (laborBtnIds.some(id => btn(id)?.disabled)) return;
+    sinusoidalActiveUi = false;
+    hipersistoliaActiveUi = false;
+    setScenarioActive('btn_sinusoidal', false);
+    setScenarioActive('btn_hiper', false);
+    lockLaborButtons(n);
+    socket.emit('command', {
+      mode:'apply_preset',
+      name:'labor_' + n,
+      tone:getTocoTone()
+    });
+  }
 
-}
   // Dicas (baseline ± metade da variação total)
   function updateRangeHints(){
     const base = getBase(), vmin = getVMin(), vmax = getVMax();
@@ -811,8 +817,12 @@ function sendSinusoidalToggle(){
     }
 
     if (e.mode === 'sinusoidal_toggle') {
+      const amp = Number(e.amp ?? 5);
+      const freq = Number(e.freq ?? 1.5);
+      const period = 60 / Math.max(0.2, freq);
       document.getElementById('cfg_mode').textContent = 'Padrão sinusoidal';
-      document.getElementById('cfg_uc').textContent = 'senoide 40s, ±5 bpm, sem ruído aleatório de movimento fetal';
+      document.getElementById('cfg_uc').textContent =
+        `senoide ±${amp.toFixed(0)} bpm; ${freq.toFixed(1).replace('.', ',')} ciclo/min; período ${period.toFixed(1).replace('.', ',')}s; sem variabilidade basal`;
       return;
     }
 
@@ -1001,6 +1011,8 @@ function sendSinusoidalToggle(){
 
   updateRangeHints();
   syncTocoDuration(getTocoDuration());
+  syncSinAmplitude(getSinAmplitude());
+  syncSinFrequency(getSinFrequency());
 </script>
 
 </body>
@@ -1142,27 +1154,12 @@ function asymVShape01(x, nadirFrac=0.40){
 
 // Padrão sinusoidal: senoide mecânica, mais espaçada e sem variabilidade basal.
 // Ciclo de 40s: 140 → 145 → 140 → 135 → 140, com áudio previsível e hipnótico.
-let sinusoidalAmp = 5;
-let sinusoidalFreq = 3;
 function sinusoidalOffset(nowMs){
   if (!state.sinusoidalOn) return 0;
-const period =
-60000 / sinusoidalFreq;
-
-const phase =
-(((nowMs-state.sinusoidalStartMs)
-%
-period)
-+
-period)
-%
-period;
-
-return sinusoidalAmp
-*
-Math.sin(
-2*Math.PI*phase/period
-);
+  const periodMs = Math.max(1000, Number(state.sinusoidalPeriodMs || 40000));
+  const ampBpm = Math.max(1, Number(state.sinusoidalAmpBpm || 5));
+  const phase = (((nowMs - state.sinusoidalStartMs) % periodMs) + periodMs) % periodMs;
+  return ampBpm * Math.sin((2 * Math.PI * phase) / periodMs);
 }
 
 // Hipersistolia: 6 contrações/10min, contrações longas, pouco repouso e hipertonia.
@@ -1538,6 +1535,9 @@ function configureTocoContractionsFromCurrentTone(peak, durSec, count = 1, perio
   showBand:false,
   sinusoidalOn:false,
   sinusoidalStartMs:0,
+  sinusoidalAmpBpm:5,
+  sinusoidalFreqPerMin:1.5,
+  sinusoidalPeriodMs:40000,
   hipersistoliaOn:false,
   hipersistoliaStartMs:0,
   preferredTocoTone:10,
@@ -2412,6 +2412,11 @@ socket.on('command', (p)=>{
     randomDrift = 0;
     randomDriftTarget = 0;
     const tone = Math.max(0, Math.min(100, parseInt(p.tone ?? state.preferredTocoTone ?? 10, 10)));
+    const amp = Math.max(1, Math.min(30, parseFloat(p.amp ?? state.sinusoidalAmpBpm ?? 5)));
+    const freq = Math.max(0.2, Math.min(6, parseFloat(p.freq ?? state.sinusoidalFreqPerMin ?? 1.5)));
+    state.sinusoidalAmpBpm = amp;
+    state.sinusoidalFreqPerMin = freq;
+    state.sinusoidalPeriodMs = 60000 / freq;
     state.preferredTocoTone = tone;
     state.hipersistoliaOn = false;
     if (state.sinusoidalOn) {
@@ -2909,9 +2914,19 @@ def on_command(payload):
         try:
             tone_raw = payload.get("tone", None)
             tone = None if tone_raw is None or tone_raw == "" else max(0, min(100, int(tone_raw)))
+            amp = float(payload.get("amp", 5) or 5)
+            freq = float(payload.get("freq", 1.5) or 1.5)
         except Exception:
-            tone = None
-        clean = {"mode": "sinusoidal_toggle"}
+            emit("ack", {"ok": False, "error": "configuração sinusoidal inválida"})
+            return
+
+        amp = max(1.0, min(30.0, amp))
+        freq = max(0.2, min(6.0, freq))
+        clean = {
+            "mode": "sinusoidal_toggle",
+            "amp": amp,
+            "freq": freq,
+        }
         if tone is not None:
             clean["tone"] = tone
         emit_command_to_room(clean)
