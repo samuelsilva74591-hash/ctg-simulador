@@ -713,6 +713,15 @@ CONTROL_HTML = r"""
     const el = document.getElementById('sin_status');
     if (el) el.textContent = `Padrão configurado: amplitude ±${amp.toFixed(0)} bpm; frequência ${freq.toFixed(1).replace('.', ',')} ciclo/min (período de ${period.toFixed(1).replace('.', ',')}s).`;
   }
+  function sendSinusoidalUpdate(){
+    // Atualiza amplitude/frequência sem ligar ou desligar o modo.
+    // O monitor só aplica visualmente quando o sinusoidal já estiver ativo.
+    socket.emit('command', {
+      mode: 'sinusoidal_update',
+      amp: getSinAmplitude(),
+      freq: getSinFrequency()
+    });
+  }
   function syncSinAmplitude(v){
     let n = parseFloat(v); if (isNaN(n)) n = 5;
     n = Math.max(1, Math.min(30, n));
@@ -720,6 +729,7 @@ CONTROL_HTML = r"""
     document.getElementById('sin_amp').value = n.toFixed(0);
     document.getElementById('sin_amp_pill').textContent = n.toFixed(0);
     updateSinStatus();
+    if (sinusoidalActiveUi) sendSinusoidalUpdate();
   }
   function syncSinFrequency(v){
     let n = parseFloat(v); if (isNaN(n)) n = 1.5;
@@ -728,6 +738,7 @@ CONTROL_HTML = r"""
     document.getElementById('sin_freq').value = n.toFixed(1);
     document.getElementById('sin_freq_pill').textContent = n.toFixed(1).replace('.', ',');
     updateSinStatus();
+    if (sinusoidalActiveUi) sendSinusoidalUpdate();
   }
   function sendSinusoidalToggle(){
     sinusoidalActiveUi = !sinusoidalActiveUi;
@@ -816,7 +827,7 @@ CONTROL_HTML = r"""
       return;
     }
 
-    if (e.mode === 'sinusoidal_toggle') {
+    if (e.mode === 'sinusoidal_toggle' || e.mode === 'sinusoidal_update') {
       const amp = Number(e.amp ?? 5);
       const freq = Number(e.freq ?? 1.5);
       const period = 60 / Math.max(0.2, freq);
@@ -2406,6 +2417,23 @@ socket.on('command', (p)=>{
       skipClamp: true
     });
 
+  } else if (p.mode === 'sinusoidal_update') {
+    const amp = Math.max(1, Math.min(30, parseFloat(p.amp ?? state.sinusoidalAmpBpm ?? 5)));
+    const freq = Math.max(0.2, Math.min(6, parseFloat(p.freq ?? state.sinusoidalFreqPerMin ?? 1.5)));
+
+    // Mantém a fase atual aproximadamente contínua ao trocar a frequência.
+    const oldPeriod = Math.max(1000, Number(state.sinusoidalPeriodMs || 40000));
+    const oldPhase = (((ctgNow() - state.sinusoidalStartMs) % oldPeriod) + oldPeriod) % oldPeriod;
+    const phaseFraction = oldPhase / oldPeriod;
+
+    state.sinusoidalAmpBpm = amp;
+    state.sinusoidalFreqPerMin = freq;
+    state.sinusoidalPeriodMs = 60000 / freq;
+
+    if (state.sinusoidalOn) {
+      state.sinusoidalStartMs = ctgNow() - phaseFraction * state.sinusoidalPeriodMs;
+    }
+
   } else if (p.mode === 'sinusoidal_toggle') {
     resetSonarTiming();
     stv = 0;
@@ -2929,6 +2957,24 @@ def on_command(payload):
         }
         if tone is not None:
             clean["tone"] = tone
+        emit_command_to_room(clean)
+        emit("ack", {"ok": True, "echo": clean})
+        return
+
+    # ----- Atualização do sinusoidal sem ligar/desligar -----
+    if mode == "sinusoidal_update":
+        try:
+            amp = float(payload.get("amp", 5) or 5)
+            freq = float(payload.get("freq", 1.5) or 1.5)
+        except Exception:
+            emit("ack", {"ok": False, "error": "configuração sinusoidal inválida"})
+            return
+
+        clean = {
+            "mode": "sinusoidal_update",
+            "amp": max(1.0, min(30.0, amp)),
+            "freq": max(0.2, min(6.0, freq)),
+        }
         emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
         return
