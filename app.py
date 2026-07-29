@@ -741,29 +741,22 @@ CONTROL_HTML = r"""
     if (sinusoidalActiveUi) sendSinusoidalUpdate();
   }
   function sendSinusoidalToggle(){
-    sinusoidalActiveUi = !sinusoidalActiveUi;
-    if (sinusoidalActiveUi) {
-      hipersistoliaActiveUi = false;
-      unlockLaborButtons();
-      setScenarioActive('btn_hiper', false);
-    }
-    setScenarioActive('btn_sinusoidal', sinusoidalActiveUi);
+    const requestedActive = !sinusoidalActiveUi;
     socket.emit('command', {
       mode: 'sinusoidal_toggle',
+      active: requestedActive,
       tone: getTocoTone(),
       amp: getSinAmplitude(),
       freq: getSinFrequency()
     });
   }
   function sendHipersistoliaToggle(){
-    hipersistoliaActiveUi = !hipersistoliaActiveUi;
-    if (hipersistoliaActiveUi) {
-      sinusoidalActiveUi = false;
-      unlockLaborButtons();
-      setScenarioActive('btn_sinusoidal', false);
-    }
-    setScenarioActive('btn_hiper', hipersistoliaActiveUi);
-    socket.emit('command', { mode: 'hipersistolia_toggle', tone:getTocoTone() });
+    const requestedActive = !hipersistoliaActiveUi;
+    socket.emit('command', {
+      mode: 'hipersistolia_toggle',
+      active: requestedActive,
+      tone:getTocoTone()
+    });
   }
   function sendLaborRate(n){
     if (laborBtnIds.some(id => btn(id)?.disabled)) return;
@@ -793,6 +786,52 @@ CONTROL_HTML = r"""
   // ====== EVENTOS (Presets) ======
   function sendPresetNormal(){ resetUiLocks(); socket.emit('command', { mode:'apply_preset', name:'normal' }); }
   function sendLabor(){ sendLaborRate(4); }
+
+  // Sincroniza esta tela de controle com o estado oficial da sessão.
+  function applySessionState(s){
+    if (!s) return;
+
+    if (typeof s.sinusoidal_on === 'boolean') {
+      sinusoidalActiveUi = s.sinusoidal_on;
+      setScenarioActive('btn_sinusoidal', sinusoidalActiveUi);
+    }
+
+    if (typeof s.hipersistolia_on === 'boolean') {
+      hipersistoliaActiveUi = s.hipersistolia_on;
+      setScenarioActive('btn_hiper', hipersistoliaActiveUi);
+    }
+
+    if (typeof s.sin_amp === 'number') {
+      const n = Math.max(1, Math.min(30, Number(s.sin_amp)));
+      document.getElementById('sin_amp_range').value = n;
+      document.getElementById('sin_amp').value = n.toFixed(0);
+      document.getElementById('sin_amp_pill').textContent = n.toFixed(0);
+    }
+
+    if (typeof s.sin_freq === 'number') {
+      const n = Math.max(0.2, Math.min(6, Number(s.sin_freq)));
+      document.getElementById('sin_freq_range').value = n;
+      document.getElementById('sin_freq').value = n.toFixed(1);
+      document.getElementById('sin_freq_pill').textContent = n.toFixed(1).replace('.', ',');
+    }
+
+    if (typeof s.baseline === 'number') syncBase(s.baseline);
+    if (typeof s.vmin === 'number') syncVMin(s.vmin);
+    if (typeof s.vmax === 'number') syncVMax(s.vmax);
+    if (typeof s.toco_tone === 'number') syncTocoTone(s.toco_tone);
+    if (typeof s.time_scale === 'number') syncSpeed(s.time_scale);
+
+    updateSinStatus();
+
+    const modeEl = document.getElementById('cfg_mode');
+    if (modeEl) {
+      if (sinusoidalActiveUi) modeEl.textContent = 'Padrão sinusoidal';
+      else if (hipersistoliaActiveUi) modeEl.textContent = 'Hipersistolia';
+      else if (s.active_mode) modeEl.textContent = s.active_mode;
+    }
+  }
+
+  socket.on('session_state', applySessionState);
 
   // Preenche display do card "Eventos"
   socket.on('ack', (m)=>{
@@ -2312,6 +2351,55 @@ function sampleUC(dt, nowMs){
 socket.on('connect', ()=> connEl.textContent = 'conectado');
 socket.on('disconnect', ()=> connEl.textContent = 'desconectado');
 
+socket.on('session_state', (s)=>{
+  if (!s) return;
+
+  if (typeof s.baseline === 'number') {
+    state.fhr_base = s.baseline;
+    state.fhr_base_target = s.baseline;
+    state.bpm = s.baseline;
+  }
+  if (typeof s.vmin === 'number') state.var_min = s.vmin;
+  if (typeof s.vmax === 'number') state.var_max = s.vmax;
+  if (typeof s.toco_tone === 'number') {
+    state.preferredTocoTone = s.toco_tone;
+    setStaticTocoTone(s.toco_tone);
+  }
+  if (typeof s.time_scale === 'number') state.timeScale = s.time_scale;
+  if (typeof s.sin_amp === 'number') state.sinusoidalAmpBpm = s.sin_amp;
+  if (typeof s.sin_freq === 'number') {
+    state.sinusoidalFreqPerMin = s.sin_freq;
+    state.sinusoidalPeriodMs = 60000 / Math.max(0.2, s.sin_freq);
+  }
+
+  const wantSin = !!s.sinusoidal_on;
+  const wantHyper = !!s.hipersistolia_on;
+
+  if (wantSin && !state.sinusoidalOn) {
+    clearTimedEvents();
+    state.hipersistoliaOn = false;
+    state.sinusoidalOn = true;
+    state.sinusoidalStartMs = ctgNow();
+    state.mode = 'normal';
+  } else if (!wantSin && state.sinusoidalOn) {
+    state.sinusoidalOn = false;
+  }
+
+  if (wantHyper && !state.hipersistoliaOn) {
+    clearTimedEvents();
+    state.sinusoidalOn = false;
+    state.hipersistoliaOn = true;
+    state.hipersistoliaStartMs = ctgNow();
+    state.mode = 'normal';
+    setStaticTocoTone(HYPER_UC_TONE);
+  } else if (!wantHyper && state.hipersistoliaOn) {
+    state.hipersistoliaOn = false;
+    setStaticTocoTone(state.preferredTocoTone);
+  }
+
+  applyHud();
+});
+
 socket.on('command', (p)=>{
   if (!p) { applyHud(); return; }
 
@@ -2446,15 +2534,16 @@ socket.on('command', (p)=>{
     state.sinusoidalFreqPerMin = freq;
     state.sinusoidalPeriodMs = 60000 / freq;
     state.preferredTocoTone = tone;
+    const shouldBeActive = (typeof p.active === 'boolean') ? p.active : !state.sinusoidalOn;
     state.hipersistoliaOn = false;
-    if (state.sinusoidalOn) {
+    if (!shouldBeActive) {
       state.sinusoidalOn = false;
       setStaticTocoTone(state.preferredTocoTone);
     } else {
       clearTimedEvents();
       setStaticTocoTone(state.preferredTocoTone);
+      if (!state.sinusoidalOn) state.sinusoidalStartMs = ctgNow();
       state.sinusoidalOn = true;
-      state.sinusoidalStartMs = ctgNow();
       state.mode = 'normal';
     }
 
@@ -2465,7 +2554,8 @@ socket.on('command', (p)=>{
     randomDriftTarget = 0;
     const tone = Math.max(0, Math.min(100, parseInt(p.tone ?? state.preferredTocoTone ?? 10, 10)));
 
-    if (state.hipersistoliaOn) {
+    const shouldBeActive = (typeof p.active === 'boolean') ? p.active : !state.hipersistoliaOn;
+    if (!shouldBeActive) {
       // Desliga e volta ao tônus basal que estava setado na tela de controle.
       clearTimedEvents();
       state.hipersistoliaOn = false;
@@ -2784,6 +2874,32 @@ def monitor_legacy():
 # ===================== SOCKET.IO ======================
 
 socket_rooms = {}
+room_states = {}
+
+def default_room_state():
+    return {
+        "sinusoidal_on": False,
+        "hipersistolia_on": False,
+        "sin_amp": 5.0,
+        "sin_freq": 1.5,
+        "baseline": 140,
+        "vmin": 5,
+        "vmax": 25,
+        "toco_tone": 10,
+        "time_scale": 1.0,
+        "active_mode": "normal",
+    }
+
+def get_room_id():
+    return socket_rooms.get(request.sid, "global")
+
+def get_room_state(room_id=None):
+    room_id = room_id or get_room_id()
+    return room_states.setdefault(room_id, default_room_state())
+
+def broadcast_room_state(room_id=None):
+    room_id = room_id or get_room_id()
+    socketio.emit("session_state", get_room_state(room_id), to=room_id)
 
 @socketio.on("connect")
 def on_connect():
@@ -2791,13 +2907,14 @@ def on_connect():
     socket_rooms[request.sid] = room_id
     join_room(room_id)
     emit("joined", {"room": room_id})
+    emit("session_state", get_room_state(room_id))
 
 @socketio.on("disconnect")
 def on_disconnect():
     socket_rooms.pop(request.sid, None)
 
 def emit_command_to_room(command):
-    room_id = socket_rooms.get(request.sid, "global")
+    room_id = get_room_id()
     socketio.emit("command", command, to=room_id)
 
 @socketio.on("command")
@@ -2805,14 +2922,21 @@ def on_command(payload):
     mode = payload.get("mode")
     bpm  = payload.get("bpm")
     uc   = payload.get("uc")
+    room_id = get_room_id()
+    room_state = get_room_state(room_id)
 
     # ----- Ritmos basais -----
     if mode in {"normal","tachy","brady","afib","asystole"}:
         clean = {"mode": mode}
         if isinstance(bpm, (int, float)):
             clean["bpm"] = max(40, min(240, int(bpm)))
+        room_state["active_mode"] = mode
+        if mode == "normal":
+            room_state["sinusoidal_on"] = False
+            room_state["hipersistolia_on"] = False
         emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
+        broadcast_room_state(room_id)
         return
 
     # ----- Contrações -----
@@ -2840,8 +2964,10 @@ def on_command(payload):
             "mode": "toco_tone",
             "tone": max(0, min(100, tone)),
         }
+        room_state["toco_tone"] = clean["tone"]
         emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
+        broadcast_room_state(room_id)
         return
 
     # ----- TOCO manual: uma contração configurada, usando o tônus basal atual -----
@@ -2893,8 +3019,10 @@ def on_command(payload):
         else:
             base = max(0, min(240, base))
             clean = {"mode": "set_baseline", "bpm": base}
+            room_state["baseline"] = base
             emit_command_to_room(clean)
             emit("ack", {"ok": True, "echo": clean})
+            broadcast_room_state(room_id)
         return
 
     # ----- Ajuste variação -----
@@ -2909,8 +3037,11 @@ def on_command(payload):
             vmax = max(0, min(80, vmax))
             if vmin > vmax: vmin, vmax = vmax, vmin
             clean = {"mode": "set_var", "vmin": vmin, "vmax": vmax}
+            room_state["vmin"] = vmin
+            room_state["vmax"] = vmax
             emit_command_to_room(clean)
             emit("ack", {"ok": True, "echo": clean})
+            broadcast_room_state(room_id)
         return
 
     # ----- Padrões obstétricos (eventos FHR) -----
@@ -2933,8 +3064,14 @@ def on_command(payload):
         clean = {"mode": "reset"}
         if tone is not None:
             clean["tone"] = tone
+        room_state["sinusoidal_on"] = False
+        room_state["hipersistolia_on"] = False
+        room_state["active_mode"] = "normal"
+        if tone is not None:
+            room_state["toco_tone"] = tone
         emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
+        broadcast_room_state(room_id)
         return
 
     # ----- Padrão sinusoidal: liga/desliga no monitor -----
@@ -2950,8 +3087,20 @@ def on_command(payload):
 
         amp = max(1.0, min(30.0, amp))
         freq = max(0.2, min(6.0, freq))
+        requested_active = payload.get("active")
+        active = (not room_state["sinusoidal_on"]) if not isinstance(requested_active, bool) else requested_active
+
+        room_state["sinusoidal_on"] = active
+        room_state["hipersistolia_on"] = False
+        room_state["sin_amp"] = amp
+        room_state["sin_freq"] = freq
+        room_state["active_mode"] = "sinusoidal" if active else "normal"
+        if tone is not None:
+            room_state["toco_tone"] = tone
+
         clean = {
             "mode": "sinusoidal_toggle",
+            "active": active,
             "amp": amp,
             "freq": freq,
         }
@@ -2959,6 +3108,7 @@ def on_command(payload):
             clean["tone"] = tone
         emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
+        broadcast_room_state(room_id)
         return
 
     # ----- Atualização do sinusoidal sem ligar/desligar -----
@@ -2975,8 +3125,11 @@ def on_command(payload):
             "amp": max(1.0, min(30.0, amp)),
             "freq": max(0.2, min(6.0, freq)),
         }
+        room_state["sin_amp"] = clean["amp"]
+        room_state["sin_freq"] = clean["freq"]
         emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
+        broadcast_room_state(room_id)
         return
 
     # ----- Hipersistolia: liga/desliga no monitor -----
@@ -2986,11 +3139,21 @@ def on_command(payload):
             tone = None if tone_raw is None or tone_raw == "" else max(0, min(100, int(tone_raw)))
         except Exception:
             tone = None
-        clean = {"mode": "hipersistolia_toggle"}
+        requested_active = payload.get("active")
+        active = (not room_state["hipersistolia_on"]) if not isinstance(requested_active, bool) else requested_active
+
+        room_state["hipersistolia_on"] = active
+        room_state["sinusoidal_on"] = False
+        room_state["active_mode"] = "hipersistolia" if active else "normal"
+        if tone is not None:
+            room_state["toco_tone"] = tone
+
+        clean = {"mode": "hipersistolia_toggle", "active": active}
         if tone is not None:
             clean["tone"] = tone
         emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
+        broadcast_room_state(room_id)
         return
 
     # ===== Presets atômicos =====
@@ -3020,11 +3183,22 @@ def on_command(payload):
             # <-- DESARMA qualquer contador de trabalho de parto ativo no monitor
             emit_command_to_room({"mode": "labor_auto", "enabled": False})
 
+            room_state.update({
+                "sinusoidal_on": False,
+                "hipersistolia_on": False,
+                "baseline": base,
+                "vmin": vmin,
+                "vmax": vmax,
+                "toco_tone": tone_min,
+                "active_mode": "normal",
+            })
+
             emit("ack", {"ok": True, "echo": {
              "mode": "apply_preset", "name": "normal",
              "bpm": base, "vmin": vmin, "vmax": vmax,
              "uc": uc0, "uc_tone_min": tone_min, "uc_tone_max": tone_max
                }})
+            broadcast_room_state(room_id)
             return
 
         elif name == "labor" or name.startswith("labor_"):
@@ -3063,6 +3237,16 @@ def on_command(payload):
             })
             emit_command_to_room({"mode": "labor_auto", "enabled": False})
 
+            room_state.update({
+                "sinusoidal_on": False,
+                "hipersistolia_on": False,
+                "baseline": base,
+                "vmin": vmin,
+                "vmax": vmax,
+                "toco_tone": tone_min,
+                "active_mode": f"trabalho de parto {contractions}/10",
+            })
+
             emit("ack", {"ok": True, "echo": {
                 "mode": "apply_preset", "name": f"labor_{contractions}",
                 "bpm": base, "vmin": vmin, "vmax": vmax,
@@ -3070,6 +3254,7 @@ def on_command(payload):
                 "contractions_per_10": contractions,
                 "uc_tone_min": tone_min, "uc_tone_max": tone_max
             }})
+            broadcast_room_state(room_id)
             return
 
         else:
@@ -3146,8 +3331,10 @@ def on_command(payload):
             return
         factor = max(0.05, min(20.0, factor))
         clean = {"mode": "time_scale", "factor": factor}
+        room_state["time_scale"] = factor
         emit_command_to_room(clean)
         emit("ack", {"ok": True, "echo": clean})
+        broadcast_room_state(room_id)
         return
 
     # ----- Novas DIPs variáveis: V, U e W, com/sem contração -----
